@@ -34,6 +34,10 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 # 把数据库保存在项目目录；不设置时默认为 ~/.local/share/ytvocab/ytvocab.db
 YTVOCAB_DB_PATH=./data/ytvocab.db
+# YouTube 要求登录或机器人验证时可启用以下 yt-dlp 选项
+# YTVOCAB_YTDLP_COOKIES_BROWSER=edge
+# YTVOCAB_YTDLP_JS_RUNTIME=node
+# YTVOCAB_YTDLP_REMOTE_COMPONENTS=ejs:github
 ```
 
 配置键保留了 `DEEPSEEK_` 前缀，但底层调用的是 OpenAI-compatible Chat Completions：`POST {DEEPSEEK_BASE_URL}/chat/completions`。`DEEPSEEK_BASE_URL` 会原样传给 SDK，不会自动补 `/v1`。例如连接本地网关：
@@ -57,7 +61,7 @@ YTVOCAB_DB_PATH=C:\Users\你的用户名\AppData\Local\ytvocab\ytvocab.db
 
 不要把包含 API key 的 `.env` 提交到 Git。
 
-yt-dlp 备用后端也只下载字幕，不下载视频或音频。安装 yt-dlp 并不保证能通过 YouTube 的登录或机器人验证，具体限制见下文。
+yt-dlp 备用后端也只下载字幕，不下载视频或音频。遇到 YouTube 登录或机器人验证时，可以通过上述环境变量让 yt-dlp 读取指定浏览器的 Cookie，并使用 Node/EJS 完成 JavaScript 挑战。Cookie 由 yt-dlp 在内存中读取和解密，本项目不会把 Cookie 值写入命令行、日志、数据库或输出文件。
 
 ## 使用
 
@@ -149,8 +153,8 @@ LLM 客户端默认地址是 `https://api.deepseek.com`，默认模型是 `deeps
 ## 已知限制
 
 - YouTube 可能限流、封锁当前 IP，或要求登录并进行机器人验证。出现 `Sign in to confirm you’re not a bot` 时，不能据此判断视频没有字幕。
-- 内置 yt-dlp 后端当前不会传递浏览器 Cookie，也没有配置 Node/EJS 挑战求解器；在受限网络环境中，普通 CLI 可能无法自动获取实际存在的字幕。
-- 内置 yt-dlp 后端当前只解析 JSON3。YouTube 只返回 VTT 时，即使字幕可下载，程序也无法直接导入。
+- yt-dlp 的浏览器 Cookie、Node 和 EJS 支持需要通过环境变量显式启用；未启用时，在受限网络环境中仍可能无法获取实际存在的字幕。
+- `--cookies-from-browser` 会让 yt-dlp 读取对应浏览器配置中的 Cookie。不要打印、导出或提交浏览器 Cookie，公共环境中应使用单独的低权限浏览器配置。
 - 自动字幕本身可能有识别错误；高置信度纠错只辅助分析并保留原文。
 - yt-dlp 备用后端会分别尝试人工轨和自动轨；它能报告所选类型，但可用轨列表不如主后端完整。
 - 句子时间由相关字幕片段时间范围估算，不是逐词对齐。
@@ -162,7 +166,7 @@ LLM 客户端默认地址是 `https://api.deepseek.com`，默认模型是 `deeps
 
 1. **视频确实没有英文字幕**：人工字幕和自动字幕轨都不存在。当前版本不会下载音频或运行 ASR，因此无法分析。
 2. **视频有字幕，但匿名请求被拦截**：常见错误包含 `Sign in to confirm you’re not a bot`、IP blocked 或请求限流。这是访问问题，不等同于没有字幕。
-3. **yt-dlp 能看到字幕，但内置后端无法导入**：浏览器 Cookie、Node/EJS 挑战求解或 VTT 格式可能是必要条件，但这些能力尚未接入当前 CLI。
+3. **yt-dlp 需要浏览器会话或 JavaScript 求解器**：配置 `YTVOCAB_YTDLP_COOKIES_BROWSER`、`YTVOCAB_YTDLP_JS_RUNTIME` 和 `YTVOCAB_YTDLP_REMOTE_COMPONENTS` 后重试。当前后端支持 JSON3 和 VTT 字幕。
 
 排查时先运行：
 
@@ -170,7 +174,7 @@ LLM 客户端默认地址是 `https://api.deepseek.com`，默认模型是 `deeps
 uv run ytvocab transcript-info "VIDEO_URL"
 ```
 
-该命令仍然依赖 `youtube-transcript-api`；如果它被 YouTube 拦截，只能说明主后端访问失败。当前项目尚未实现真实浏览器字幕后端，不应把浏览器登录态、自动绕过验证或音频 ASR 视为已有功能。
+该命令仍然依赖 `youtube-transcript-api`；如果它被 YouTube 拦截，只能说明主后端访问失败。`analyze` 会继续尝试配置后的 yt-dlp 备用后端。当前项目尚未实现浏览器内字幕请求或音频 ASR。
 
 ## 开发检查
 

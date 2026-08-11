@@ -23,6 +23,9 @@ class Settings:
     database_path: Path
     base_url: str = "https://api.deepseek.com"
     spacy_model: str = "en_core_web_sm"
+    ytdlp_cookies_browser: str | None = None
+    ytdlp_js_runtime: str | None = None
+    ytdlp_remote_components: str | None = None
 
     @classmethod
     def from_env(cls, *, model: str | None = None, database_path: Path | None = None) -> Settings:
@@ -33,4 +36,7 @@ class Settings:
             api_key=os.getenv("DEEPSEEK_API_KEY"),
             base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
             database_path=database_path or default_database_path(),
+            ytdlp_cookies_browser=os.getenv("YTVOCAB_YTDLP_COOKIES_BROWSER") or None,
+            ytdlp_js_runtime=os.getenv("YTVOCAB_YTDLP_JS_RUNTIME") or None,
+            ytdlp_remote_components=os.getenv("YTVOCAB_YTDLP_REMOTE_COMPONENTS") or None,
         )

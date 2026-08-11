@@ -59,7 +59,11 @@ def analyze_video(
             raise
         progress("主字幕后端失败，尝试 yt-dlp 字幕后端")
         try:
-            transcript = YtDlpTranscriptProvider().fetch(video_id, language)
+            transcript = YtDlpTranscriptProvider(
+                cookies_browser=settings.ytdlp_cookies_browser,
+                js_runtime=settings.ytdlp_js_runtime,
+                remote_components=settings.ytdlp_remote_components,
+            ).fetch(video_id, language)
         except TranscriptError as fallback_error:
             raise TranscriptError(
                 f"{primary_error}\n备用字幕后端也失败：{fallback_error}"

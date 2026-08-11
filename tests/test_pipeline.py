@@ -3,8 +3,9 @@ from pathlib import Path
 import pytest
 from conftest import FakeNLP
 
+import youtube_vocab.pipeline as pipeline_module
 from youtube_vocab.config import Settings
-from youtube_vocab.errors import NoEnglishTranscriptError
+from youtube_vocab.errors import NoEnglishTranscriptError, TranscriptError
 from youtube_vocab.models import RawCaption, TranscriptDocument, TranscriptTrack
 from youtube_vocab.pipeline import analyze_video
 
@@ -23,6 +24,11 @@ class FakeProvider:
 class EmptyProvider:
     def fetch(self, video_id: str, language: str = "en") -> TranscriptDocument:
         raise NoEnglishTranscriptError("没有可用的英文字幕；当前版本不会运行 ASR。")
+
+
+class BlockedProvider:
+    def fetch(self, video_id: str, language: str = "en") -> TranscriptDocument:
+        raise TranscriptError("blocked")
 
 
 def test_no_llm_runs_without_api_key(tmp_path: Path) -> None:
@@ -52,3 +58,39 @@ def test_no_subtitles_has_clear_error(tmp_path: Path) -> None:
             transcript_provider=EmptyProvider(),
             nlp=FakeNLP(),
         )
+
+
+def test_pipeline_passes_ytdlp_browser_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    received: dict[str, str | None] = {}
+
+    class FakeYtDlpProvider(FakeProvider):
+        def __init__(self, **options: str | None) -> None:
+            received.update(options)
+
+    monkeypatch.setattr(pipeline_module, "YouTubeTranscriptProvider", BlockedProvider)
+    monkeypatch.setattr(pipeline_module, "YtDlpTranscriptProvider", FakeYtDlpProvider)
+    settings = Settings(
+        model="test",
+        api_key=None,
+        database_path=tmp_path / "test.db",
+        ytdlp_cookies_browser="edge",
+        ytdlp_js_runtime="node",
+        ytdlp_remote_components="ejs:github",
+    )
+
+    result, _, _ = analyze_video(
+        "dQw4w9WgXcQ",
+        settings=settings,
+        output_dir=tmp_path / "out",
+        no_llm=True,
+        nlp=FakeNLP(),
+    )
+
+    assert result.raw_captions
+    assert received == {
+        "cookies_browser": "edge",
+        "js_runtime": "node",
+        "remote_components": "ejs:github",
+    }
